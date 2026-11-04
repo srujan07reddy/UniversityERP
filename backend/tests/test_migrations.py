@@ -46,21 +46,26 @@ def test_migration_history_exists(alembic_config):
     """Verify ScriptDirectory detects generated migration files."""
     script = ScriptDirectory.from_config(alembic_config)
     heads = script.get_heads()
-    assert len(heads) >= 1
-    assert heads[0] == "dd84e2e88e3b"
+    assert len(heads) == 1
+    assert heads[0] == script.get_current_head()
 
 
 @pytest.mark.asyncio
-async def test_alembic_version_table_in_db():
+async def test_alembic_version_table_in_db(alembic_config):
     """Verify alembic_version table exists in PostgreSQL and tracks head revision."""
+    script = ScriptDirectory.from_config(alembic_config)
+    expected_head = script.get_current_head()
     async with async_engine.connect() as conn:
         result = await conn.execute(text("SELECT version_num FROM alembic_version;"))
         current_rev = result.scalar()
-        assert current_rev == "dd84e2e88e3b"
+        assert current_rev == expected_head
 
 
 def test_programmatic_upgrade_and_downgrade(alembic_config):
     """Verify alembic command upgrade and downgrade lifecycle."""
+    script = ScriptDirectory.from_config(alembic_config)
+    expected_head = script.get_current_head()
+
     # 1. Downgrade to base
     command.downgrade(alembic_config, "base")
 
@@ -68,6 +73,5 @@ def test_programmatic_upgrade_and_downgrade(alembic_config):
     command.upgrade(alembic_config, "head")
 
     # Verify head reached cleanly
-    script = ScriptDirectory.from_config(alembic_config)
     head_rev = script.get_current_head()
-    assert head_rev == "dd84e2e88e3b"
+    assert head_rev == expected_head

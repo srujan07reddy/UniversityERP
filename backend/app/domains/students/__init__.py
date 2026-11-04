@@ -1,1 +1,13 @@
-﻿# students - __init__.py (FastAPI + SQLAlchemy + Pydantic v2)
+from app.domains.students.models import (
+    Student,
+    StudentAcademicRecord,
+    StudentEnrollment,
+    StudentLifecycleEvent,
+)
+
+__all__ = [
+    "Student",
+    "StudentAcademicRecord",
+    "StudentEnrollment",
+    "StudentLifecycleEvent",
+]

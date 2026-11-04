@@ -19,8 +19,8 @@ The University ERP development lifecycle follows a disciplined 12-phase incremen
 | **Phase 0** | **Development Preparation** | `COMPLETED` | 100% | 13 Master Architecture Docs, Frozen Tech Baseline, Modular Monolith Layout (8 Platform + 15 Domain modules scaffolded). | Architecture frozen; contracts scaffolded; no unresolved technology ambiguities. |
 | **Phase 1** | **Infrastructure & Environment** | `COMPLETED` | 100% | `compose.yaml` (PostgreSQL 17, Valkey 8, FastAPI, Celery, Vite), `.env.example`, `.env`, Dockerfiles, Python venv, Node/pnpm toolchain, Capacitor 7 native Android platform (`frontend/android/`). | Container configurations validated; Python venv verified; frontend Vite build passing; Capacitor Android sync operational. |
 | **Phase 2** | **Backend Foundation** | `COMPLETED` | 100% | Stages 2.1–2.8 complete: `core/config.py`, `core/logging.py`, `core/middleware.py`, `database/`, `schemas/response.py`, `repositories/base.py`, `services/base.py`, `alembic.ini`, `migrations/`, live PostgreSQL 17. | 60 automated regression tests passing (100%); modular API routing (/api/v1); pagination & envelopes active; structured logging & correlation tracing; bidirectional Alembic migrations; safe error masking; full E2E lifespan verified. |
-| **Phase 3** | **Identity & Organization** | `NEXT UP` | 0% | User accounts, authentication (JWT), staff/student profiles, multi-level org hierarchy (University → School → Dept → Programme → Section). | User registration, login, token refresh, and complete org tree navigation tested via API. |
-| **Phase 4** | **RBAC & Authorization** | `PLANNED` | 0% | Role hierarchy, granular permissions, organizational scoping, role delegation, ABAC rules, separation of duties. | Centralized permission engine validates cross-department data isolation and role boundaries. |
+| **Phase 3** | **Identity & Organization** | `COMPLETED` | 100% | Stages 3.1–3.8 complete: `platform/organization/`, `platform/identity/`, `domains/students/`, and `domains/staff/` (models, schemas, repositories, services, routers), Argon2id hashing, JWT access & refresh token lifecycle, token rotation & revocation blacklist, zero-cascade deactivation safety, Alembic migrations `66c51afc91e9`, `5fcf29116fc7`, `811b898f76be`, `22fcfab3fa69`, `2d7665a1a918`, & `3460f1d24165`, live PostgreSQL 17. | 118 automated regression tests passing (100%); complete institutional hierarchy, student admissions & academic history, staff appointments & dossiers, user credential linkages, multi-organizational memberships, joint affiliations, authentication, token rotation, blacklisting, account lifecycle, zero-cascade preservation, and full end-to-end integration verified. |
+| **Phase 4** | **RBAC & Authorization** | `READY` | 0% | Role hierarchy, granular permissions, organizational scoping, role delegation, ABAC rules, separation of duties. | Centralized permission engine validates cross-department data isolation and role boundaries. |
 | **Phase 5** | **Governance & Workflow Engine** | `PLANNED` | 0% | Multi-step approval state machine, SLA routing, audit event logging, in-app/push/email notifications. | Approval workflows execute end-to-end; immutable audit trails recorded for all state mutations. |
 | **Phase 6** | **Frontend Foundation** | `PLANNED` | 0% | Design system tokens (Emerald/Gold), institutional layouts, navigation rails, TanStack Query API layer, mobile safe area responsive layouts. | Responsive web layout + native Android APK render portal skeleton cleanly with dark/light tokens. |
 | **Phase 7** | **Core ERP Modules** | `PLANNED` | 0% | Academics, Students, Employees, Attendance, Examinations, Finance modules. | Core university operations (student lifecycle, course registration, grading, fee collection) fully functional. |
@@ -181,13 +181,260 @@ The University ERP development lifecycle follows a disciplined 12-phase incremen
 ---
 
 ### Phase 3: Identity & Organization
-- **Status:** `PLANNED`
-- **Objective:** Implement identity management, password policies, user authentication, and the core institutional organizational tree.
-- **Key Modules:**
-  - `app/platform/identity/`: User accounts, credentials, sessions, refresh tokens.
-  - `app/platform/organization/`: Institutions, Schools, Departments, Programmes, Academic Years, Batches, Sections.
-  - `app/domains/students/`: Core student profile entities.
-  - `app/domains/staff/`: Faculty and employee entities.
+- **Status:** `IN PROGRESS (Stages 3.1 & 3.2 Complete — 25% Overall Phase Progress)`
+- **Objective:** Establish the institutional identity layer—modeling who exists in the university, what organizational entity they belong to, and how their institutional identity is maintained (kept strictly separate from authorization/RBAC).
+
+#### Stage Breakdown & Status:
+| Stage | Stage Name | Status | Automated Test Suite | Result |
+|:---:|:---|:---:|:---|:---:|
+| **3.1** | **Institutional Organization Model** | `COMPLETED` | `backend/tests/test_organization.py` | 8 passed |
+| **3.2** | **User Identity Management** | `COMPLETED` | `backend/tests/test_identity.py` | 10 passed |
+| **3.3** | **Student Identity** | `COMPLETED` | `backend/tests/test_students.py` | 10 passed |
+| **3.4** | **Staff Identity** | `COMPLETED` | `backend/tests/test_staff.py` | 10 passed |
+| **3.5** | **Identity Relationships** | `COMPLETED` | `backend/tests/test_relationships.py` | 7 passed |
+| **3.6** | **Identity Lifecycle** | `COMPLETED` | `backend/tests/test_lifecycle.py` | 4 passed |
+| **3.7** | **Authentication Foundation** | `COMPLETED` | `backend/tests/test_auth.py` | 8 passed |
+| **3.8** | **Integration & Verification** | `COMPLETED` | `backend/tests/test_phase3_e2e.py` | 1 passed (118/118 full suite) |
+
+#### Completed Stages Detail:
+
+##### Stage 3.1: Institutional Organization Model (`COMPLETED`)
+- **Implemented Components:**
+  - `backend/app/platform/organization/models.py`: 10 SQLAlchemy 2.x declarative entities inheriting from `AuditBaseModel`:
+    1. `University`: Apex institutional authority charter.
+    2. `OrganizationalUnit`: Schools, Departments, Functional Units (COE, Finance, IQAC, Placement), and Administrative Units with recursive self-referential hierarchy.
+    3. `OrganizationalRelationship`: Explicit non-hierarchical, matrix, and coordination relationships (`ADMINISTRATIVE_PARENT`, `FUNCTIONAL_COORDINATION`, `REPORTING_TO`, `ACADEMIC_COORDINATION`, `AFFILIATION`).
+    4. `AcademicYear`: Multi-year containers with active/current tracking.
+    5. `Semester`: Discrete academic sessions (`ODD`, `EVEN`, `SUMMER`).
+    6. `AcademicProgram`: Degree curricula anchored to departments.
+    7. `Specialization`: Disciplinary concentrations and minors.
+    8. `Course`: Master course catalog with credits and contact hours.
+    9. `AcademicBatch`: Student cohorts mapped to graduation years.
+    10. `Section`: Operational classroom divisions.
+  - `backend/app/platform/organization/schemas.py`: Comprehensive Pydantic v2 validation and response schemas.
+  - `backend/app/platform/organization/repositories.py`: Dedicated asynchronous repositories extending `BaseRepository`.
+  - `backend/app/platform/organization/services.py`: Domain service enforcing parent-child ownership, referential validation, and recursive tree generation (`get_organization_tree`).
+  - `backend/app/platform/organization/router.py`: REST endpoints mounted under `/api/v1/organization`.
+  - `backend/migrations/versions/20261104_0705_66c51afc91e9_create_institutional_organization_tables.py`: Alembic migration generated and applied to live PostgreSQL 17.
+- **Repeatable Automated Regression Suite (`tests/test_organization.py`):** 8 tests passing:
+  1. `test_create_and_get_university`: Charter creation and retrieval.
+  2. `test_duplicate_university_code_conflict`: 409 conflict safety.
+  3. `test_school_and_department_hierarchy_and_tree`: Recursive tree generation.
+  4. `test_explicit_cross_unit_relationships`: Non-hierarchical coordination mapping.
+  5. `test_academic_year_and_semesters`: Academic calendar lifecycle.
+  6. `test_program_and_specialization`: Degree and specialization registration.
+  7. `test_course_catalog`: Course registration and department listing.
+  8. `test_batches_and_sections`: Batch cohorts and section allocations.
+
+##### Stage 3.2: User Identity Management (`COMPLETED`)
+- **Implemented Components:**
+  - `backend/app/platform/identity/models.py`: 4 SQLAlchemy 2.x declarative entities:
+    1. `User`: Central institutional identity with unique username, institutional email, phone, Argon2id password hash, account status (`PENDING_ACTIVATION`, `ACTIVE`, `SUSPENDED`, `DEACTIVATED`, `LOCKED`), and lockout markers.
+    2. `UserProfile`: Personal and demographic records (first/last names, DOB, gender, blood group, avatar, full address, and emergency contact details).
+    3. `UserRecoveryToken`: SHA-256 hashed cryptographic tokens for account activation, password reset, and MFA recovery.
+    4. `UserLifecycleEvent`: Immutable audit log recording every identity transition with timestamps, actor IDs, reasons, and JSON metadata.
+  - `backend/app/core/security.py`: Argon2id password hashing via `PasswordHasher` (OWASP recommended parameters: 64 MiB memory, 3 iterations, 4 parallelism), constant-time verification, cryptographic token generation (`secrets.token_urlsafe`), and SHA-256 digest hashing.
+  - `backend/app/platform/identity/schemas.py`: Pydantic v2 schemas for registration, profile updates, password modification, status transitions, token activation, and lifecycle auditing.
+  - `backend/app/platform/identity/repositories.py`: Asynchronous repositories (`UserRepository`, `UserProfileRepository`, `UserRecoveryTokenRepository`, `UserLifecycleEventRepository`).
+  - `backend/app/platform/identity/services.py`: `UserIdentityService` implementing account creation, token activation, status updates, password changes, and password recovery workflows.
+  - `backend/app/platform/identity/router.py`: REST endpoints mounted under `/api/v1/identity`.
+  - `backend/migrations/versions/20261104_0715_5fcf29116fc7_create_user_identity_tables.py`: Alembic migration applied to live PostgreSQL 17.
+- **Repeatable Automated Regression Suite (`tests/test_identity.py`):** 10 tests passing:
+  1. `test_argon2id_hashing_and_verification`: Argon2id hash generation and verification.
+  2. `test_token_generation_and_hashing`: Cryptographic token entropy and digest hashing.
+  3. `test_user_registration_argon2_hashing_and_pending_activation`: Registration, pending state, and profile linkage.
+  4. `test_duplicate_username_and_email_prevention`: 409 conflict safety on unique fields.
+  5. `test_account_activation_workflow`: One-time activation token consumption and reuse prevention.
+  6. `test_user_profile_update`: Demographic and emergency contact profile updates.
+  7. `test_account_lifecycle_status_transitions`: Suspension, deactivation, and reinstatement state transitions.
+  8. `test_password_change_lifecycle`: Current password validation and Argon2id re-hashing.
+  9. `test_password_reset_recovery_workflow`: Secure out-of-band recovery token workflow.
+  10. `test_identity_lifecycle_audit_trail`: Immutable audit trail verification.
+
+##### Stage 3.3: Student Identity (`COMPLETED`)
+- **Implemented Components:**
+  - `backend/app/domains/students/models.py`: 4 SQLAlchemy 2.x declarative entities decoupled from authentication credentials:
+    1. `Student`: Institutional student master entity with unique admission number, optional register number, roll number, demographic data (DOB, gender, blood group, nationality, community, religion), parent/guardian details, contact info, academic hierarchy linkages (department, program, batch, section), current semester, and student lifecycle status (`ADMITTED`, `ACTIVE`, `ON_LEAVE`, `SUSPENDED`, `DISCONTINUED`, `ALUMNI`, `WITHDRAWN`).
+    2. `StudentAcademicRecord`: Prior educational records (10th, 12th/HSC, Diplomas) with institution, board, year of passing, and score/CGPA for admission verification.
+    3. `StudentEnrollment`: Semester-by-semester academic enrollment history linking students to academic years, semesters, programs, batches, and sections.
+    4. `StudentLifecycleEvent`: Immutable audit log capturing status transitions (`ADMISSION`, `STATUS_CHANGE`, `ENROLLMENT`, `SECTION_ASSIGNED`, etc.) with timestamps, reasons, and approving actors.
+  - `backend/app/domains/students/schemas.py`: Pydantic v2 schemas for student registration, profile updates, status changes, section assignment, academic record creation, and semester enrollment.
+  - `backend/app/domains/students/repositories.py`: Dedicated async repositories (`StudentRepository`, `StudentAcademicRecordRepository`, `StudentEnrollmentRepository`, `StudentLifecycleEventRepository`).
+  - `backend/app/domains/students/services.py`: `StudentService` implementing admission validation, duplicate prevention, status transitions, batch/section assignment, academic history management, and semester progression.
+  - `backend/app/domains/students/router.py`: REST endpoints mounted under `/api/v1/students`.
+  - `backend/migrations/versions/20261104_0818_811b898f76be_create_student_identity_tables.py`: Alembic migration applied to live PostgreSQL 17.
+- **Repeatable Automated Regression Suite (`tests/test_students.py`):** 10 tests passing:
+  1. `test_student_admission_and_profile_creation`: Admission, demographic persistence, initial academic history, and initial lifecycle event logging.
+  2. `test_duplicate_admission_number_conflict`: 409 conflict safety on unique admission numbers.
+  3. `test_duplicate_register_number_conflict`: 409 conflict safety on university register numbers.
+  4. `test_get_student_and_not_found`: Profile summary retrieval and safe 404 behavior.
+  5. `test_list_students_paginated_and_filters`: Paginated listing, department filtering, and text search across names and identifiers.
+  6. `test_update_student_profile`: Partial profile updates (contact, address, emergency contact).
+  7. `test_assign_batch_and_section`: Section assignment and roll number allocation.
+  8. `test_student_lifecycle_status_transitions`: Status state machine progression and invalid state rejection.
+  9. `test_add_academic_record_and_enrollment_progression`: Adding educational history and semester enrollment progression.
+  10. `test_student_identity_distinct_from_credentials`: Verification that student identity remains strictly distinct from authentication credentials.
+
+##### Stage 3.4: Staff Identity (`COMPLETED`)
+- **Implemented Components:**
+  - `backend/app/domains/staff/models.py`: 4 SQLAlchemy 2.x declarative entities maintaining strict architectural separation between institutional designation and RBAC authorization roles:
+    1. `Staff`: Institutional employment master entity with unique permanent `staff_id`, `biometric_id`, `institutional_email`, demographic data, contact info, employment type (`REGULAR`, `PROBATION`, `CONTRACT`, etc.), staff type (`TEACHING`, `NON_TEACHING`, `ADMINISTRATIVE`, `TECHNICAL`, etc.), designation (institutional title/rank), department and school associations, joining date, probation period, notice period, and employment status (`ACTIVE`, `PROBATION`, `ON_LEAVE`, `SUSPENDED`, `RESIGNED`, `RETIRED`, `TERMINATED`, `RELIEVED`).
+    2. `StaffQualification`: Academic and professional credentials (Ph.D., M.Tech, NET/SLET, etc.) with institution, awarding university, year of passing, and certificates.
+    3. `StaffExperience`: Previous teaching, industrial, research, or administrative employment records with roles and relieving details.
+    4. `StaffLifecycleEvent`: Immutable audit log capturing all employment events (`APPOINTMENT`, `STATUS_CHANGE`, `DESIGNATION_CHANGE`, `DEPARTMENT_TRANSFER`, `PROBATION_CONFIRMATION`, `RELIEVED`, etc.) with reasons and approving actors.
+  - `backend/app/domains/staff/schemas.py`: Pydantic v2 schemas for staff appointment, profile updates, status changes, promotion/redesignation, department transfer, qualification addition, and experience addition.
+  - `backend/app/domains/staff/repositories.py`: Dedicated async repositories (`StaffRepository`, `StaffQualificationRepository`, `StaffExperienceRepository`, `StaffLifecycleEventRepository`).
+  - `backend/app/domains/staff/services.py`: `StaffService` enforcing unique employee identifiers, biometric ID, and institutional email, handling appointment, promotion/redesignation, department transfer, qualification and experience archival, and employment status transitions.
+  - `backend/app/domains/staff/router.py`: REST endpoints mounted under `/api/v1/staff`.
+  - `backend/migrations/versions/20261104_0833_22fcfab3fa69_create_staff_identity_tables.py`: Alembic migration applied to live PostgreSQL 17.
+- **Repeatable Automated Regression Suite (`tests/test_staff.py`):** 10 tests passing:
+  1. `test_staff_appointment_and_profile_creation`: Appointment, demographic and employment persistence, initial credentials, initial experience, and initial lifecycle logging.
+  2. `test_duplicate_staff_id_and_email_conflicts`: 409 conflict safety on staff_id, biometric_id, and institutional email.
+  3. `test_get_staff_and_not_found`: Profile summary retrieval and safe 404 behavior.
+  4. `test_list_staff_paginated_and_filters`: Paginated listing, department/staff_type filtering, and text search across names and codes.
+  5. `test_update_staff_profile`: Partial profile updates (contact, address, emergency contact).
+  6. `test_staff_designation_update`: Promotion / redesignation workflow and audit event logging.
+  7. `test_staff_department_transfer`: Department transfer order workflow and audit logging.
+  8. `test_staff_lifecycle_status_transitions`: Status progression (PROBATION -> ACTIVE -> ON_LEAVE -> RELIEVED) and invalid state rejection.
+  9. `test_add_qualifications_and_experience`: Adding educational degrees and industry experience post-appointment.
+  10. `test_staff_designation_distinct_from_rbac_roles`: Verification that staff designation does not conflate with application RBAC roles or credentials.
+
+##### Stage 3.5: Identity Relationships (`COMPLETED`)
+- **Implemented Components:**
+  - `backend/app/platform/identity/models.py`:
+    - `UserOrganizationMembership`: Explicit multi-membership association supporting concurrent memberships across academic schools, departments, research centres of excellence, and administrative wings (`PRIMARY`, `MEMBER`, `AFFILIATE`, `REPRESENTATIVE`, `CHAIR`, `COMMITTEE_MEMBER`).
+    - Bidirectional SQLAlchemy 2.x relationships on `User`: `student` (`uselist=False`), `staff` (`uselist=False`), `organization_memberships` (`cascade="all, delete-orphan"`).
+  - `backend/app/domains/students/models.py`: Added bidirectional `user` relationship on `Student`.
+  - `backend/app/domains/staff/models.py`:
+    - `StaffDepartmentAffiliation`: Association entity for secondary, joint, adjunct, and administrative appointments across departments alongside primary department.
+    - Bidirectional SQLAlchemy 2.x relationships on `Staff`: `user` (`uselist=False`), `department_affiliations` (`cascade="all, delete-orphan"`).
+  - `backend/app/platform/identity/schemas.py`: Schemas for `UserOrganizationMembershipCreate`, `UserOrganizationMembershipResponse`, `UserLinkStudentRequest`, `UserLinkStaffRequest`, `StaffDepartmentAffiliationCreate`, `StaffDepartmentAffiliationResponse`, and `IdentityFootprintResponse`.
+  - `backend/app/platform/identity/services.py` & `backend/app/domains/staff/services.py`:
+    - Business methods for student credential linkage & unlinking (`link_student`, `unlink_student`).
+    - Business methods for staff credential linkage & unlinking (`link_staff`, `unlink_staff`).
+    - Multi-membership provisioning and revocation (`add_organization_membership`, `remove_organization_membership`).
+    - Secondary/joint department affiliation workflows (`add_department_affiliation`, `remove_department_affiliation`).
+    - Unified identity footprint resolver (`get_identity_footprint`) consolidating user profile, linked student record, linked staff appointment, and all organizational memberships.
+  - `backend/app/platform/identity/router.py` & `backend/app/domains/staff/router.py`:
+    - `/api/v1/identity/relationships/link-student` & `/unlink-student/{student_id}`.
+    - `/api/v1/identity/relationships/link-staff` & `/unlink-staff/{staff_id}`.
+    - `/api/v1/identity/relationships/memberships/user/{user_id}` & `/memberships/{id}`.
+    - `/api/v1/identity/relationships/footprint/{user_id}`.
+    - `/api/v1/staff/{staff_id}/affiliations` & `/staff/affiliations/{id}`.
+  - `backend/migrations/versions/20261104_0841_2d7665a1a918_create_identity_relationship_tables.py`: Alembic migration applied to live PostgreSQL 17.
+- **Repeatable Automated Regression Suite (`tests/test_relationships.py`):** 7 tests passing:
+  1. `test_user_and_student_linkage`: Linking User to Student and footprint resolution.
+  2. `test_user_student_double_link_conflict`: 409 conflict safety preventing duplicate user or student linkages.
+  3. `test_user_and_student_unlinking`: Unlinking user and student records, and rejecting invalid unlinking.
+  4. `test_user_and_staff_linkage_and_unlinking`: Full link and unlink lifecycle for staff records.
+  5. `test_multiple_user_organization_memberships`: Concurrent memberships across departments and centres.
+  6. `test_duplicate_membership_conflict`: 409 conflict safety preventing duplicate active memberships in the same unit.
+  7. `test_staff_department_affiliations`: Secondary research affiliations and administrative appointments for staff.
+
+##### Stage 3.6: Identity Lifecycle (`COMPLETED`)
+- **Implemented Components:**
+  - `backend/app/platform/identity/models.py`:
+    - `UserLifecycleEvent`: Model captures event type (`CREATED`, `ACTIVATED`, `SUSPENDED`, `REINSTATED`, `DEACTIVATED`, `LOCKED_OUT`, `UNLOCKED`, `PASSWORD_CHANGED`, `PASSWORD_RESET_REQUESTED`, `PROFILE_UPDATED`, `LINK_STUDENT`, `UNLINK_STUDENT`, `LINK_STAFF`, `UNLINK_STAFF`, `MEMBERSHIP_GRANTED`, `MEMBERSHIP_REVOKED`), actor ID, reason string, and JSON metadata.
+    - Zero Cascade Safety: Foreign keys to `User` in `Student` and `Staff` tables enforce `ondelete="SET NULL"`. Account deactivation transitions user credentials to `DEACTIVATED` without cascading or deleting student academic records, enrollments, staff qualifications, or affiliations.
+  - `backend/app/platform/identity/schemas.py`: `UserActionReasonRequest` schema for administrative actions (suspension, reinstatement, deactivation, unlocking).
+  - `backend/app/platform/identity/repositories.py`: `UserLifecycleEventRepository.list_events` with pagination, event type filtering, user ID scoping, and date range filters (`from_date`, `to_date`).
+  - `backend/app/platform/identity/services.py`:
+    - `suspend_user`: Status transition to `SUSPENDED` with validation preventing duplicate suspension.
+    - `reinstate_user`: Reinstatement back to `ACTIVE` from suspended, locked, or deactivated states.
+    - `deactivate_user`: Graceful institutional deactivation stamping `deactivated_at`, preserving all associated academic and staff records intact.
+    - `unlock_user`: Administrative lockout reset clearing `failed_login_attempts` and `locked_until`.
+    - `update_profile`: Tracks updated field keys in lifecycle event metadata.
+    - `list_lifecycle_events`: Paginated query across institutional audit log.
+  - `backend/app/platform/identity/router.py`:
+    - `POST /api/v1/identity/users/{user_id}/suspend`
+    - `POST /api/v1/identity/users/{user_id}/reinstate`
+    - `POST /api/v1/identity/users/{user_id}/deactivate`
+    - `POST /api/v1/identity/users/{user_id}/unlock`
+    - `GET /api/v1/identity/lifecycle/events` (paginated audit trail search)
+- **Repeatable Automated Regression Suite (`tests/test_lifecycle.py`):** 4 tests passing:
+  1. `test_user_status_transitions_lifecycle`: Verification of full status progression (`PENDING_ACTIVATION` → `ACTIVE` → `SUSPENDED` → `REINSTATED` → `LOCKED` → `UNLOCKED`) and lifecycle event logging.
+  2. `test_deactivation_zero_cascade_safety`: Critical institutional verification confirming account deactivation leaves student admission data, prior academic records, enrollments, staff employee data, qualifications, and affiliations 100% intact.
+  3. `test_profile_update_and_audit_event`: Verifying `PROFILE_UPDATED` event logging with metadata listing modified fields.
+  4. `test_search_institutional_audit_trail`: Global audit log querying with pagination, user ID filtering, and event type filtering.
+
+##### Stage 3.7: Authentication Foundation (`COMPLETED`)
+- **Implemented Components:**
+  - `backend/app/core/config.py`: Added JWT configuration (`JWT_SECRET_KEY`, `JWT_ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES = 60`, `REFRESH_TOKEN_EXPIRE_DAYS = 7`, `jwt_secret` property).
+  - `backend/app/core/security.py`:
+    - `create_access_token`: Signed JWT token with claims (`sub`, `username`, `email`, `user_type`, `jti`, `iat`, `exp`, `type="access"`).
+    - `create_refresh_token`: Extended signed JWT token with claims (`sub`, `jti`, `iat`, `exp`, `type="refresh"`).
+    - `decode_jwt`: JWT signature and expiration verification with explicit `AuthenticationException` handling.
+  - `backend/app/platform/identity/models.py`:
+    - `UserRefreshToken`: Persisted refresh token sessions with SHA-256 token hashing, client device/IP tracking, and revocation state.
+    - `RevokedToken`: Blacklisted token repository indexed by unique `jti` ensuring immediate access invalidation prior to expiration.
+  - `backend/app/platform/identity/schemas.py`: `LoginRequest`, `TokenResponse`, `RefreshTokenRequest`, `LogoutRequest`, `TokenRevokeRequest`.
+  - `backend/app/platform/identity/repositories.py`:
+    - `UserRefreshTokenRepository`: Active token lookup by SHA-256 hash, JTI lookup, session revocation.
+    - `RevokedTokenRepository`: Real-time JTI blacklist verification and token invalidation.
+  - `backend/app/platform/identity/services.py`:
+    - `authenticate`: Login via username or institutional email, Argon2id verification, brute-force protection (lockout after 5 failed attempts for 15 minutes), token pair generation, audit events (`LOGIN_SUCCESS`, `LOGIN_FAILED`, `LOCKED_OUT`).
+    - `refresh_tokens`: Validates refresh token, rotates session (marks old token revoked, issues new token pair), audit event (`TOKEN_REFRESH`).
+    - `logout`: Immediate access token blacklisting and refresh token revocation, audit event (`LOGOUT`).
+    - `revoke_token`: Arbitrary token invalidation by JTI, audit event (`TOKEN_REVOKED`).
+    - `get_current_user_from_token`: Resolves active user from unrevoked Bearer token.
+  - `backend/app/platform/identity/dependencies.py`: `get_current_user` FastAPI dependency for protected routes.
+  - `backend/app/platform/identity/auth_router.py`:
+    - `POST /api/v1/auth/login`
+    - `POST /api/v1/auth/refresh`
+    - `POST /api/v1/auth/logout`
+    - `GET /api/v1/auth/me`
+    - `GET /api/v1/auth/footprint`
+    - `POST /api/v1/auth/revoke`
+  - `backend/migrations/versions/20261104_1130_3460f1d24165_create_auth_token_tables.py`: Alembic migration applied to live PostgreSQL 17.
+- **Repeatable Automated Regression Suite (`tests/test_auth.py`):** 8 tests passing:
+  1. `test_login_success_and_jwt_claims`: Login via username and email, returning signed JWT tokens with claims and logging `LOGIN_SUCCESS`.
+  2. `test_login_invalid_password_and_failed_event`: Invalid password returns 401 and logs `LOGIN_FAILED` event with attempt counter.
+  3. `test_brute_force_lockout_trigger`: 5 consecutive failed attempts trigger account lockout (`LOCKED_OUT`), subsequent logins blocked until administrative unlock.
+  4. `test_login_blocked_for_inactive_statuses`: Inactive statuses (`PENDING_ACTIVATION`, `SUSPENDED`, `DEACTIVATED`) cannot log in.
+  5. `test_protected_me_and_footprint_endpoints`: Protected routes require valid Bearer token.
+  6. `test_refresh_token_rotation_and_revocation`: Refresh token rotation and rejection of already-used refresh tokens.
+  7. `test_logout_blacklists_access_token_and_revokes_refresh`: Immediate token invalidation on logout.
+  8. `test_manual_token_revocation`: Explicit token revocation renders access token immediately unusable.
+
+##### Stage 3.8: Integration & Verification (`COMPLETED`)
+- **Implemented Components:**
+  - `backend/tests/test_phase3_e2e.py`: Comprehensive end-to-end institutional workflow suite validating complete cross-domain integration across all Phase 3 subsystems:
+    1. Apex Institutional Hierarchy provisioning (University, Schools, Departments, Research Centres, Programs, Academic Years, Semesters, Batches, Sections).
+    2. Student Admission & Academic Progression (Admission, prior 10th/12th educational records, section allocation, roll number assignment, and semester enrollment).
+    3. Staff Appointment & Dossier (Appointment, designations, Ph.D. qualifications, and cross-department joint research affiliations).
+    4. User Account Provisioning & Linkage (Student & Staff portal user accounts, bidirectional ORM linkage, multi-organizational memberships).
+    5. Authentication & Session Lifecycles (Argon2id password verification, JWT access tokens, `/me` profile retrieval, `/footprint` consolidated institutional footprint resolution, refresh token rotation, and logout token revocation).
+    6. Identity Lifecycle & Zero-Cascade Safety (Account suspension, reinstatement, and safe deactivation guaranteeing 100% preservation of student academic history, enrollments, staff employment records, qualifications, and affiliations).
+- **Automated Regression Test Suite:**
+  - Full suite execution: **118 passed out of 118 tests across all 16 test files** in `backend/tests/` (100% passing).
+  - Test suites:
+    1. `tests/test_api_v1.py` (6 passed)
+    2. `tests/test_auth.py` (8 passed)
+    3. `tests/test_bootstrap.py` (6 passed)
+    4. `tests/test_config.py` (6 passed)
+    5. `tests/test_database.py` (9 passed)
+    6. `tests/test_exceptions.py` (10 passed)
+    7. `tests/test_foundation_e2e.py` (5 passed)
+    8. `tests/test_identity.py` (10 passed)
+    9. `tests/test_lifecycle.py` (4 passed)
+    10. `tests/test_logging.py` (13 passed)
+    11. `tests/test_migrations.py` (5 passed)
+    12. `tests/test_organization.py` (8 passed)
+    13. `tests/test_phase3_e2e.py` (1 passed)
+    14. `tests/test_relationships.py` (7 passed)
+    15. `tests/test_staff.py` (10 passed)
+    16. `tests/test_students.py` (10 passed)
+- **Phase 3 Exit Criteria Audit:**
+  - [x] Institutional organization model operational with recursive unit tree.
+  - [x] Central user identity operational with Argon2id password hashing.
+  - [x] Student identity operational with prior records and semester enrollments.
+  - [x] Staff identity operational with qualifications and experience, strictly decoupled from RBAC roles.
+  - [x] Identity relationships operational with multi-unit memberships and cross-unit affiliations.
+  - [x] Identity lifecycle operational with zero cascade deletion on account deactivation.
+  - [x] Authentication foundation operational with JWT access tokens, refresh token rotation, and JTI blacklist revocation.
+  - [x] Zero hardcoded secrets, full environment-driven configuration.
+  - [x] Bidirectional Alembic schema evolution preserved with migrations up to `3460f1d24165`.
+  - [x] Repeatable automated regression tests pass (118/118).
 
 ---
 

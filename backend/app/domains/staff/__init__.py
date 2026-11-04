@@ -1,1 +1,15 @@
-﻿# staff - __init__.py (FastAPI + SQLAlchemy + Pydantic v2)
+from app.domains.staff.models import (
+    Staff,
+    StaffDepartmentAffiliation,
+    StaffExperience,
+    StaffLifecycleEvent,
+    StaffQualification,
+)
+
+__all__ = [
+    "Staff",
+    "StaffQualification",
+    "StaffExperience",
+    "StaffLifecycleEvent",
+    "StaffDepartmentAffiliation",
+]
